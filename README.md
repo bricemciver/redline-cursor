@@ -4,127 +4,119 @@
 
 # redline
 
-A Claude Code plugin for **automatic** code review, adversarial review, and rescue delegation — powered by Codex.
+A Cursor plugin for **automatic** code review, adversarial review, and rescue delegation -- by a second Cursor model.
 
-Works with your existing OpenAI subscription, or route through [OpenRouter](https://openrouter.ai) for access to any model (GPT, Claude, Gemini, DeepSeek, and more).
+Reviews run through the Cursor CLI on your Cursor account, always using a different model family than the one that wrote the code, so you get a genuine second opinion.
 
 ## The model decides
 
-Redline's key principle: **Claude decides what help it needs.** After each response, a lightweight Stop hook asks whether code changes were made. If so, Claude evaluates the context and picks the most helpful action:
+Redline's key principle: **the agent decides what help it needs.** After each response, a lightweight `stop` hook checks whether there are uncommitted code changes. If so, the agent evaluates the context and picks the most helpful action:
 
-- `/redline:review` — standard code review
-- `/redline:adversarial` — challenge design decisions, probe hidden assumptions, test failure modes
-- `/redline:rescue` — delegate a task to Codex as a smart friend
+- `/redline-review` -- standard code review
+- `/redline-adversarial` -- challenge design decisions, probe hidden assumptions, test failure modes
+- `/redline-rescue` -- delegate a task to a second model as a smart friend
 
 No hardcoded triggers, no diff thresholds. The model is in the best position to decide.
 
 ## How it works
 
 ```
-Claude Code Stop hook (fires after each response)
-  → reminds Claude to consider /redline:... commands
-  → Claude decides based on what it just did:
-      run a review, challenge the design, delegate to Codex, or skip
-  → suppressed when already responding to a hook (no loops)
+Cursor stop hook (fires after each agent response)
+  -> sends a follow-up asking the agent to consult the redline-check skill
+  -> the agent decides based on what it just did:
+      run a review, challenge the design, delegate to a second model, or skip
+  -> the review runs in a read-only `cursor-agent` on a different model
+  -> fires at most once per turn (loop_limit: 1), so no loops
 ```
 
-A non-user-invocable skill description stays in Claude's context at all times, providing the decision-making guidance. The hook is just a minimal nudge.
+The `redline-check` skill holds the decision-making guidance. The hook is just a minimal nudge.
 
-Reviews happen **automatically** — no manual invocation needed. You can also run any command directly at any time.
+Reviews happen **automatically** -- no manual invocation needed. You can also run any skill directly at any time.
 
 ## Install
 
-```
-/plugin install redline@alexanderatallah/redline
-```
-
-Then run `/redline:setup` to configure your provider, model, and effort level.
+Add this repository as a plugin marketplace in Cursor (or install `redline` from the Cursor marketplace once published), then run `/redline-setup` to sign in to Cursor and pick the review model.
 
 ### Development
 
+Cursor loads local plugins from `~/.cursor/plugins/local/`. Symlinks are only followed when their target is inside that directory, so copy the plugin in:
+
 ```bash
-claude --plugin-dir ./plugins/redline
+rsync -a --delete ./plugins/redline/ ~/.cursor/plugins/local/redline/
 ```
 
-## Commands
+Then run **Developer: Reload Window**. Check the **Hooks** output channel to debug the `stop` hook. Run the model-selection tests with `node --test plugins/redline/scripts/lib/`.
 
-| Command | Description |
+## Skills
+
+| Skill | Description |
 |---------|-------------|
-| `/redline:setup` | Configure provider (OpenAI or OpenRouter), model, effort, and routing |
-| `/redline:review [target]` | Run a standard code review (defaults to uncommitted changes) |
-| `/redline:adversarial [target]` | Challenge design decisions, probe assumptions, test failure modes |
-| `/redline:rescue <task>` | Delegate a task to Codex for help when stuck |
+| `/redline-setup` | Sign in to Cursor and pick the review model |
+| `/redline-review [target]` | Run a standard code review (defaults to uncommitted changes) |
+| `/redline-adversarial [target]` | Challenge design decisions, probe assumptions, test failure modes |
+| `/redline-rescue <task>` | Delegate a task to a second model for help when stuck |
 
-### `/redline:review [target]`
+### `/redline-review [target]`
 
 Standard code review. By default reviews uncommitted changes. Pass an argument to review other diffs:
 
 ```
-/redline:review                    # uncommitted changes (default)
-/redline:review last 3 commits     # cumulative diff of last 3 commits
-/redline:review against main       # changes vs main branch
-/redline:review commit abc123      # single commit
+/redline-review                    # uncommitted changes (default)
+/redline-review last 3 commits     # cumulative diff of last 3 commits
+/redline-review against main       # changes vs main branch
+/redline-review commit abc123      # single commit
 ```
 
-### `/redline:adversarial [target]`
+### `/redline-adversarial [target]`
 
-Goes beyond bug-finding. Challenges design decisions, probes hidden assumptions (what is the code silently relying on?), identifies failure modes (race conditions, resource exhaustion, stale state), and questions trade-offs. Accepts the same target arguments as `/redline:review`.
+Goes beyond bug-finding. Challenges design decisions, probes hidden assumptions (what is the code silently relying on?), identifies failure modes (race conditions, resource exhaustion, stale state), and questions trade-offs. Accepts the same target arguments as `/redline-review`.
 
-### `/redline:rescue`
+### `/redline-rescue`
 
-When you're stuck — hand the problem to Codex. Describe what you're working on and what you need help with. Codex works on it in the background. Results are presented faithfully — Claude doesn't filter or second-guess them. You decide which suggestions to act on.
+When you're stuck -- hand the problem to a second model. Describe what you're working on and what you need help with. It works on it in the background (read-only). Results are presented faithfully -- the agent doesn't filter or second-guess them. You decide which suggestions to act on.
 
 ## Configuration
 
-During `/redline:setup`, configure:
+During `/redline-setup`, pick the review **model** -- `gpt-5.6-sol-high` (default), `claude-opus-5-thinking-high`, `cursor-grok-4.6-high`, or any id from `cursor-agent models`. Reasoning effort is part of the Cursor model id.
 
-- **Provider** — use your existing OpenAI subscription, or route through OpenRouter for model choice
-- **Model** (OpenRouter only) — `~openai/gpt-latest` (default), `openrouter/auto`, or any [OpenRouter model slug](https://openrouter.ai/models)
-- **Effort** (OpenRouter only) — reasoning effort: minimal, low, medium, high (default: medium)
-- **Provider variant** (OpenRouter only) — `:nitro` (fastest, default), `:floor` (cheapest), or standard routing
+The review model never shares a family with the session's model. If your choice matches (say, both are Claude), Redline falls back to the first available model from another family. Models your account can't use are skipped.
+
+Settings are stored in `~/.cursor/redline/config.json` (outside the plugin directory, so they survive plugin updates).
 
 ## Authentication
 
-Redline supports two authentication methods:
-
-**OpenAI subscription** — if Codex is already authenticated (`codex login`), Redline can use it directly. No additional setup needed.
-
-**OpenRouter** — route through [OpenRouter](https://openrouter.ai) for access to any model. Set your API key via:
+Redline only uses your Cursor account, through the Cursor CLI:
 
 ```bash
-# Environment variable
-export OPENROUTER_API_KEY=sk-or-...
-
-# Or run OAuth login during setup
-/redline:setup
+cursor-agent login    # or run /redline-setup
+cursor-agent status
 ```
 
 ## Customization
 
-Every command is a plain markdown file in `commands/`. Edit them to fit your project:
+Every skill is a plain markdown file in `skills/<name>/SKILL.md`. Edit them to fit your project:
 
-- **Focus the review** — add "pay special attention to SQL injection and auth boundaries" to `review.md`
-- **Change the adversarial persona** — make it focus on performance, security, or accessibility instead of general design
-- **Adjust rescue behavior** — tell Codex to always write tests, or to explain its reasoning step-by-step
+- **Focus the review** -- add "pay special attention to SQL injection and auth boundaries" to `redline-review/SKILL.md`
+- **Change the adversarial persona** -- make it focus on performance, security, or accessibility instead of general design
+- **Adjust rescue behavior** -- tell the helper to always suggest tests, or to explain its reasoning step-by-step
 
-No scripts to modify, no config flags to learn. Just edit the markdown and `/reload-plugins`.
+No scripts to modify, no config flags to learn. Just edit the markdown and reload the window.
 
 ## Why Redline?
 
-Compared to other ways of reviewing Claude's code:
+Compared to other ways of reviewing agent-written code:
 
 | | Redline | Other plugins |
 |---|---|---|
-| **Models** | OpenAI subscription or any model via OpenRouter | Typically locked to one provider |
+| **Models** | Any Cursor model, always a different family than the author | Often the same model reviewing its own work |
 | **Automatic reviews** | Stop hook triggers automatically, model decides when to review | Manual invocation only |
-| **Customizable** | Edit plain markdown commands to change review behavior | Commands are often hardcoded or complex to modify |
+| **Customizable** | Edit plain markdown skills to change review behavior | Skills are often hardcoded or complex to modify |
 | **Simplicity** | ~13 files, no build step | Often 30+ files across scripts, agents, and configs |
 
 ## Requirements
 
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
-- [Codex CLI](https://github.com/openai/codex)
-- OpenAI subscription (via `codex login`) **or** [OpenRouter](https://openrouter.ai) account
+- [Cursor](https://cursor.com) account
+- [Cursor CLI](https://cursor.com/cli) (`cursor-agent`), signed in
 
 ## License
 

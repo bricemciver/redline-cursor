@@ -1,0 +1,17 @@
+{
+  "name": "redline",
+  "owner": { "name": "Alex Atallah" },
+  "metadata": {
+    "description": "Automatic code review for Cursor -- standard review, adversarial review, and rescue delegation by a second Cursor model.",
+    "version": "0.7.0"
+  },
+  "plugins": [
+    {
+      "name": "redline",
+      "description": "Automatic code review, adversarial review, and rescue by a second Cursor model.",
+      "version": "0.7.0",
+      "author": { "name": "Alex Atallah" },
+      "source": "./plugins/redline"
+    }
+  ]
+}
