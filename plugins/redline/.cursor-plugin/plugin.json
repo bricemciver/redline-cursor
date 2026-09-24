@@ -1,0 +1,8 @@
+{
+  "name": "redline",
+  "version": "0.7.0",
+  "description": "Automatic code review, adversarial review, and rescue by a second Cursor model.",
+  "author": { "name": "Alex Atallah" },
+  "license": "MIT",
+  "keywords": ["code-review", "second-opinion"]
+}

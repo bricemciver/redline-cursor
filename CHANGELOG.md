@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0
+
+- **Cursor plugin** -- ported from Claude Code. Manifests moved to `.cursor-plugin/`, commands converted to skills (`/redline-review`, `/redline-adversarial`, `/redline-rescue`, `/redline-setup`, plus the model-only `redline-check`).
+- **Cursor `stop` hook** -- uses `loop_count` / `loop_limit: 1` instead of `stop_hook_active`, returns `followup_message`, only fires on completed turns, and checks `git status` (including untracked files) in the workspace root. The follow-up passes along the session's model.
+- **Reviews run on Cursor, not Codex** -- `scripts/exec.mjs` runs a read-only `cursor-agent -p --mode ask` authenticated with the user's Cursor account. OpenAI subscription and OpenRouter support (providers, API keys, OAuth login, effort, routing variants) is removed, along with `login.mjs` and `lib/codex.mjs`.
+- **Review model differs from the session model** -- `lib/models.mjs` picks the configured model, falling back to `gpt-5.6-sol-high`, `claude-opus-5-thinking-high`, or `cursor-grok-4.6-high`, skipping any model the account can't use (per `cursor-agent models`) or that shares a family with the session's model. Covered by `node --test scripts/lib/`.
+- **Config moved to `~/.cursor/redline/config.json`** -- Cursor has no plugin data directory or per-user `userConfig`. The only setting is `model`.
+
 ## 0.6.1
 
 - **Default review model bumped to `~openai/gpt-latest`** — floating slug that tracks OpenAI's latest on OpenRouter, so new setups don't pin to a specific generation. Updated in `exec.mjs` defaults, `plugin.json` userConfig, `/redline:setup` Step 3, and README.
